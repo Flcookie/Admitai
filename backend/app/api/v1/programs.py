@@ -17,34 +17,70 @@ def list_programs(
     offset: int = Query(0, description="分页偏移量")
 ):
 
-    query = supabase.table("programs").select("*")
-
-    # 🇬🇧 国家筛选
-    if country:
-        query = query.ilike("location", f"%{country}%")
-
-    # 🏫 学校筛选
-    if school:
-        query = query.or_(
-            f"chinese_name.ilike.%{school}%,english_name.ilike.%{school}%"
-        )
-
-    # 🔍 专业关键词筛选
-    if keyword:
-        query = query.or_(
-            f"program_cn_name.ilike.%{keyword}%,program_en_name.ilike.%{keyword}%"
-        )
-
-    # 分页
-    query = query.range(offset, offset + limit - 1)
-
-    res = query.execute()
-    return {
-        "count": len(res.data),
-        "items": res.data,
-        "limit": limit,
-        "offset": offset
-    }
+    try:
+        # 先获取总数（用于分页）
+        count_query = supabase.table("programs").select("*", count="exact")
+        
+        # 🇬🇧 国家筛选
+        if country:
+            count_query = count_query.ilike("location", f"%{country}%")
+        
+        # 🏫 学校筛选
+        if school:
+            count_query = count_query.or_(
+                f"chinese_name.ilike.%{school}%,english_name.ilike.%{school}%"
+            )
+        
+        # 🔍 专业关键词筛选
+        if keyword:
+            count_query = count_query.or_(
+                f"program_cn_name.ilike.%{keyword}%,program_en_name.ilike.%{keyword}%"
+            )
+        
+        # 获取总数
+        count_res = count_query.execute()
+        total_count = count_res.count if hasattr(count_res, 'count') and count_res.count is not None else len(count_res.data) if count_res.data else 0
+        
+        # 获取分页数据
+        query = supabase.table("programs").select("*")
+        
+        # 🇬🇧 国家筛选
+        if country:
+            query = query.ilike("location", f"%{country}%")
+        
+        # 🏫 学校筛选
+        if school:
+            query = query.or_(
+                f"chinese_name.ilike.%{school}%,english_name.ilike.%{school}%"
+            )
+        
+        # 🔍 专业关键词筛选
+        if keyword:
+            query = query.or_(
+                f"program_cn_name.ilike.%{keyword}%,program_en_name.ilike.%{keyword}%"
+            )
+        
+        # 分页
+        query = query.range(offset, offset + limit - 1)
+        
+        res = query.execute()
+        
+        return {
+            "count": total_count,
+            "items": res.data or [],
+            "limit": limit,
+            "offset": offset
+        }
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"获取项目列表失败: {e}", exc_info=True)
+        return {
+            "count": 0,
+            "items": [],
+            "limit": limit,
+            "offset": offset
+        }
 
 
 @router.get("/faculties")
